@@ -7,6 +7,8 @@ from random import randint, randrange, sample
 from time import time
 from PIL import Image, ImageDraw
 
+from utils import Logger
+
 
 class Node:
     """Data structure that represents an element of an array with special
@@ -158,7 +160,7 @@ class Maze:
         self.end = Node(0, 0)
 
         # Array metrics:
-        self.explored_nodes, self.optimal_path = [], []
+        self.explored_nodes, self.optimal_path = [], []  # TODO: remove this.
         self.is_generated = self.is_explored = False
         self.count = {
             "path": 0,
@@ -166,60 +168,16 @@ class Maze:
             "total": self.x * self.y
         }
 
-        # Logger settings:
-        self.logger = logger
-        self.LOG_DIRECTORY = "log_cache"
-        self.LOG_PREFIX = "log"
-        self.LOG_FORMAT = "txt"
-        self.LOG_FILE = f"./{self.LOG_DIRECTORY}/{self.LOG_PREFIX}_" +\
-            f"{''.join(str(time()).split('.'))}.{self.LOG_FORMAT}"
-        # Logs are dinamically modified, so its identifier must remain fixed
-        #	so that more contents can be appended to them.
+        # Logger and image output settings:
+        self.logger = Logger() if logger else None
 
-        # Image settings:
-        self.IMAGE_DIRECTORY = "image_cache"
-        self.IMAGE_PREFIX = "image"
-        self.IMAGE_FORMAT = "png"
-        self.IMAGE_FILE = None
-        # Images might be exported several times per object creation, hence
-        #	the necessity of making their identifier variable (in 'Maze.image').
+        self.IMAGE_SETTINGS = {
+            "directory": "image_cache",
+            "prefix": "image",
+            "format": "png"
+        }
 
         self.generate_path()
-
-    @staticmethod
-    def _writer(file: str, argument, indentation: int, newlines: int):
-        """TODO: add docstring"""
-        header = f"+ {datetime.now().isoformat()} "
-        file.write(
-            header.ljust(len(header) + 4 * (indentation + 1), '-')
-            + f" {argument}" + newlines * '\n'
-        )
-
-    def _log(self, *arguments, indentation=0, expand=True) -> None:
-        """TODO: add docstring"""
-        if not self.logger:
-            return None
-
-        if not path.isdir(f"./{self.LOG_DIRECTORY}"):
-            mkdir(f"./{self.LOG_DIRECTORY}")
-
-        with open(self.LOG_FILE, mode='a', encoding="utf-8") as log_file:
-            if len(arguments) >= 1:
-                self._writer(log_file, arguments[0], indentation, 1)
-
-                if len(arguments) > 1:
-                    for argument in arguments[1:]:
-                        if isinstance(argument, (list, tuple, set)) and expand:
-                            for index, element in enumerate(argument):
-                                self._writer(
-                                    log_file, f"{index} :: {element}", indentation + 2, 1)
-                        else:
-                            self._writer(log_file, argument,
-                                         indentation + 1, 1)
-
-            log_file.write('\n')
-
-        return None
 
     def _set_node_color(self):
         """TODO: add docstring"""
@@ -277,7 +235,7 @@ class Maze:
             (node.x - 1, node.y)   # Left
         )
 
-        self._log(
+        self.logger.log(
             f"[NEXT_NODES] Next coordinates for node {node}:",
             coordinates, indentation=1, expand=False
         )
@@ -288,7 +246,7 @@ class Maze:
         ]
         nodes = sample(nodes, len(nodes))
 
-        self._log(
+        self.logger.log(
             f"[NEXT_NODES] Next nodes for node {node}:", nodes, indentation=2)
 
         return nodes
@@ -320,7 +278,7 @@ class Maze:
             (node.x - 1, node.y)
         )
 
-        self._log(
+        self.logger.log(
             f"[SURROUNDING NODES] Surrounding coordinates for node {node}:",
             coordinates, indentation=1, expand=False
         )
@@ -330,7 +288,7 @@ class Maze:
             if 0 <= coord[0] < self.x and 0 <= coord[1] < self.y
         ]
 
-        self._log(
+        self.logger.log(
             f"[SURROUNDING NODES] Surrounding nodes for node {node}: ", nodes, indentation=2)
 
         return nodes
@@ -349,7 +307,7 @@ class Maze:
 
     def _randomize_divergence(self, nodes: list) -> list:
         """TODO: add docstring"""
-        self._log("[CAESAR] Unfiltered:", nodes, indentation=1)
+        self.logger.log("[CAESAR] Unfiltered:", nodes, indentation=1)
 
         bias = round(max(self.x, self.y) * (1 / 4))
         chance = randint(bias if bias <= len(
@@ -357,7 +315,7 @@ class Maze:
         nodes = sample(nodes, chance if 0 <= chance <=
                        len(nodes) else .66 * len(nodes))
 
-        self._log("[CAESAR] Filtered:", nodes, indentation=2)
+        self.logger.log("[CAESAR] Filtered:", nodes, indentation=2)
 
         return nodes
 
@@ -369,7 +327,8 @@ class Maze:
         if randint(0, 100) / 100 < probability:
             path_tiles = [node for node in self.node_list if node.state == 1]
 
-            self._log("[GOAL SPREADER] Elements:", path_tiles, indentation=1)
+            self.logger.log("[GOAL SPREADER] Elements:",
+                            path_tiles, indentation=1)
 
             self.end = path_tiles[0]
             top_distance = self._manhattan_distance(self.end, path_tiles[0])
@@ -381,8 +340,8 @@ class Maze:
 
             self.end.set_state(10)
 
-            self._log("[GOAL SPREADER] Selected goal:",
-                      self.end, indentation=2)
+            self.logger.log("[GOAL SPREADER] Selected goal:",
+                            self.end, indentation=2)
 
     def generate_path(self) -> None:
         """Generates a random path for the base array."""
@@ -390,11 +349,11 @@ class Maze:
         if self.is_generated:
             self._reset_generated_nodes()
 
-        self._log("Start:", self.start)
+        self.logger.log("Start:", self.start)
         timer = time()
         frontier = [self.start]
 
-        self._log("[PATH GENERATOR] Initial rontier:", frontier)
+        self.logger.log("[PATH GENERATOR] Initial rontier:", frontier)
 
         while frontier:
             selected_nodes, candidates = [], []
@@ -405,7 +364,7 @@ class Maze:
                      if neighbor.state not in (-10, 1)]
                 )
 
-            self._log("[PATH GENERATOR] Candidates:", candidates)
+            self.logger.log("[PATH GENERATOR] Candidates:", candidates)
 
             selected_nodes = self._randomize_divergence([
                 candidate for candidate in candidates if len([
@@ -420,17 +379,18 @@ class Maze:
                 node.set_state(1)
                 self.count["path"] += 1
 
-            self._log("[PATH GENERATOR] Updated frontier:", frontier)
-            self._log(f"[PATH GENERATOR] Updated display:\n\n{self.ascii()}")
+            self.logger.log("[PATH GENERATOR] Updated frontier:", frontier)
+            self.logger.log(
+                f"[PATH GENERATOR] Updated display:\n\n{self.ascii()}")
 
-        self._log("[PATH GENERATOR] Node map:", self.node_list)
+        self.logger.log("[PATH GENERATOR] Node map:", self.node_list)
 
         self._set_end_node()
         self.is_generated = True
 
-        self._log("[PATH GENERATOR] Generation time:",
-                  f"{(time() - timer):.5f}s.")
-        self._log(f"Display:\n{str(self)}", indentation=1)
+        self.logger.log("[PATH GENERATOR] Generation time:",
+                        f"{(time() - timer):.5f}s.")
+        self.logger.log(f"Display:\n{str(self)}", indentation=1)
 
     @staticmethod
     def _manhattan_distance(start: Node, end: Node) -> int:
@@ -470,15 +430,15 @@ class Maze:
         frontier = StackFrontier(self.start)
         self.is_explored, has_end = True, False
 
-        self._log("[DFS] Initial frontier:", frontier)
+        self.logger.log("[DFS] Initial frontier:", frontier)
 
         while not frontier.is_empty() and not has_end:
             self.explored_nodes.append(node := frontier.remove_node())
             if node.state != -10:
                 node.set_state(2)
 
-            self._log("[DFS] Selected node:", node)
-            self._log(f"[DFS] Updated display:\n\n{self.ascii()}")
+            self.logger.log("[DFS] Selected node:", node)
+            self.logger.log(f"[DFS] Updated display:\n\n{self.ascii()}")
 
             neighbors = [
                 node for node in self._get_neighbors(node)
@@ -492,12 +452,13 @@ class Maze:
                     self.explored_nodes.append(self.end)
                     has_end = True
 
-                    self._log("[DFS] Search time:", f"{(time() - timer):.5}s.")
+                    self.logger.log("[DFS] Search time:",
+                                    f"{(time() - timer):.5}s.")
                     break
 
             frontier.add_nodes(neighbors)
 
-            self._log("[DFS] Updated frontier:", frontier)
+            self.logger.log("[DFS] Updated frontier:", frontier)
 
         self.count["explored"] = len(self.explored_nodes)
         self._set_node_color()
@@ -514,15 +475,15 @@ class Maze:
         frontier = QueueFrontier(self.start)
         self.is_explored, has_end = True, False
 
-        self._log("[BFS] Initial frontier:", frontier)
+        self.logger.log("[BFS] Initial frontier:", frontier)
 
         while not frontier.is_empty() and not has_end:
             self.explored_nodes.append(node := frontier.remove_node())
             if node.state != -10:
                 node.set_state(2)
 
-            self._log("[BFS] Selected node:", node)
-            self._log(f"[BFS] Updated display:\n\n{self.ascii()}")
+            self.logger.log("[BFS] Selected node:", node)
+            self.logger.log(f"[BFS] Updated display:\n\n{self.ascii()}")
 
             neighbors = [
                 node for node in self._get_neighbors(node)
@@ -536,12 +497,13 @@ class Maze:
                     self.explored_nodes.append(self.end)
                     has_end = True
 
-                    self._log("[BFS] Search time:", f"{(time() - timer):.5}s.")
+                    self.logger.log("[BFS] Search time:",
+                                    f"{(time() - timer):.5}s.")
                     break
 
             frontier.add_nodes(neighbors)
 
-            self._log("[BFS] Updated frontier:", frontier)
+            self.logger.log("[BFS] Updated frontier:", frontier)
 
         self.count["explored"] = len(self.explored_nodes)
         self._set_node_color()
@@ -561,15 +523,15 @@ class Maze:
         frontier = [self.start]
         self.is_explored, has_end = True, False
 
-        self._log("[GBFS] Initial frontier:", frontier)
+        self.logger.log("[GBFS] Initial frontier:", frontier)
 
         while len(frontier) >= 1 and not has_end:
             self.explored_nodes.append(node := frontier.pop())
             if node.state != -10:
                 node.set_state(2)
 
-            self._log("[GBFS] Selected node:", node)
-            self._log(f"[GBFS] Updated display:\n\n{self.ascii()}")
+            self.logger.log("[GBFS] Selected node:", node)
+            self.logger.log(f"[GBFS] Updated display:\n\n{self.ascii()}")
 
             neighbors = [
                 node for node in self._get_neighbors(node)
@@ -583,16 +545,16 @@ class Maze:
                     self.explored_nodes.append(self.end)
                     has_end = True
 
-                    self._log("[GBFS] Search time:",
-                              f"{(time() - timer):.5f}s.")
+                    self.logger.log("[GBFS] Search time:",
+                                    f"{(time() - timer):.5f}s.")
                     break
 
-            self._log("[GBFS] Neighbors:", neighbors, indentation=1)
+            self.logger.log("[GBFS] Neighbors:", neighbors, indentation=1)
 
             frontier.extend(neighbors)
             frontier = sorted(frontier, reverse=True, key=lambda x: x.weight)
 
-            self._log("[GBFS] Updated frontier:", frontier)
+            self.logger.log("[GBFS] Updated frontier:", frontier)
 
         self.count["explored"] = len(self.explored_nodes)
         self._set_node_color()
@@ -612,15 +574,15 @@ class Maze:
         frontier = [self.start]
         self.is_explored, has_end = True, False
 
-        self._log("[RS] Initial frontier:", frontier)
+        self.logger.log("[RS] Initial frontier:", frontier)
 
         while len(frontier) >= 1 and not has_end:
             self.explored_nodes.append(node := frontier.pop())
             if node.state != -10:
                 node.set_state(2)
 
-            self._log("[RS] Selected node:", node)
-            self._log(f"[RS] Updated display:\n\n{self.ascii()}")
+            self.logger.log("[RS] Selected node:", node)
+            self.logger.log(f"[RS] Updated display:\n\n{self.ascii()}")
 
             neighbors = [
                 node for node in self._get_neighbors(node)
@@ -634,15 +596,16 @@ class Maze:
                     self.explored_nodes.append(self.end)
                     has_end = True
 
-                    self._log("[RS] Search time:", f"{(time() - timer):.5f}s.")
+                    self.logger.log("[RS] Search time:",
+                                    f"{(time() - timer):.5f}s.")
                     break
 
-            self._log("[RS] Neighbors:", neighbors, indentation=1)
+            self.logger.log("[RS] Neighbors:", neighbors, indentation=1)
 
             frontier.extend(neighbors)
             frontier = sorted(frontier, reverse=True, key=lambda x: x.weight)
 
-            self._log("[RS] Updated frontier:", frontier)
+            self.logger.log("[RS] Updated frontier:", frontier)
 
         self.count["explored"] = len(self.explored_nodes)
         self._set_node_color()
